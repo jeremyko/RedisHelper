@@ -36,12 +36,6 @@
 const size_t MAX_CMD_LEN = 1024 * 1024 ; //1 mb
 const size_t MAX_CONNECT_RETRY = 50;
 
-typedef enum _EnumClientReply_ {
-    CLIENT_REPLY_ON    =0,
-    CLIENT_REPLY_OFF  
-    //CLIENT_REPLY_SKIP
-} EnumClientReply  ;
-
 typedef enum _EnumRoleReplication_ {
     ROLE_MASTER    =0,
     ROLE_REPLICA   //slave
@@ -58,8 +52,6 @@ class RedisHelper
         is_connected_=false;
         pipe_appended_cnt_ = 0;
         max_reconn_retry_ = MAX_CONNECT_RETRY ;
-        clent_reply_     = CLIENT_REPLY_ON;
-        old_clent_reply_ = CLIENT_REPLY_ON;
         connect_timeout_ = 10; //default 10 secs
     }
     virtual ~RedisHelper() {
@@ -194,20 +186,12 @@ class RedisHelper
             freeReplyObject(reply_); 
             reply_=NULL;
         }
-        if(clent_reply_ != CLIENT_REPLY_ON ){
-            DEBUG_LOG ( "no reply expedted" );
-            redisvCommand(ctx_, format, ap);
-            va_end(ap);
-            return true;
-        }
         while(true){
             reply_ = (redisReply*)redisvCommand(ctx_, format, ap);
 
             if ( !reply_ || reply_->type == REDIS_REPLY_ERROR ) {
-                char temp_str [10];
-                snprintf(temp_str,sizeof(temp_str),"%d", ctx_->err);
                 err_msg_ = std::string("failed,") + ctx_->errstr + std::string(",") + 
-                    std::string(temp_str);
+                    std::to_string(ctx_->err);
                 DEBUG_ELOG (err_msg_ << ", ctx_->err=" << ctx_->err );
                 if(reply_){
                     freeReplyObject(reply_); 
@@ -232,10 +216,6 @@ class RedisHelper
     ///////////////////////////////////////////////////////////////////////////////
     bool AppendCmdPipeline(const char* format, ... )
     {
-        //if(!is_connected_ ){
-        //    err_msg_ = std::string(" failed,not connected");
-        //    return false;
-        //}
         va_list ap;
         va_start(ap, format);
         if(REDIS_OK !=redisvAppendCommand(ctx_,format,ap)){
@@ -253,16 +233,7 @@ class RedisHelper
     //XXX this function set reply null.
     bool EndCmdPipeline()
     {
-        if(!is_connected_ ){
-            err_msg_ = std::string(" failed,not connected");
-            DEBUG_ELOG(err_msg_);
-            return false;
-        }
         DEBUG_LOG ("pipe_appended_cnt_ = " << pipe_appended_cnt_ );
-        if(clent_reply_ != CLIENT_REPLY_ON ){
-            DEBUG_ELOG ("clent_reply_ != CLIENT_REPLY_ON" );
-            return true;
-        }
         if(reply_){
             freeReplyObject(reply_); 
             reply_=NULL;
@@ -301,54 +272,6 @@ class RedisHelper
         return reply_; 
     }
 
-    ///////////////////////////////////////////////////////////////////////////////
-    //per client config 
-    bool SetClientReply(EnumClientReply cmd)
-    {
-        if(!is_connected_ ){
-            err_msg_ = std::string(" failed,not connected");
-            DEBUG_ELOG(err_msg_);
-            return false;
-        }
-        std::string reply ="";
-        if(cmd == CLIENT_REPLY_ON){
-            reply="ON";
-        } else if(cmd == CLIENT_REPLY_OFF){
-            reply="OFF";
-        } /* else if(cmd == CLIENT_REPLY_SKIP){
-             reply="SKIP";
-             }*/
-        else{
-            char tmp_str[10];
-            snprintf(tmp_str, sizeof(tmp_str), "%d", cmd);
-            err_msg_ = std::string("error : invalid arg,") + std::string(tmp_str); //XXX std::to_string
-            return false;
-        }
-        clent_reply_ = cmd;
-        DEBUG_LOG("cmd = " << cmd << ", old_clent_reply_=" << old_clent_reply_ );
-        if(cmd == CLIENT_REPLY_ON ){
-            if(old_clent_reply_ != CLIENT_REPLY_ON ){
-                //current OFF and trying ON ==> need reconnect 
-                //XXX need to reconnec . EAGIN occurs(Resource temporarily unavailable)
-                DEBUG_GREEN_LOG ("current OFF , request ON ==> reconnect" );
-                if(!ConnectServer(redis_svr_ip_.c_str(), redis_svr_port_,my_server_role_)){
-                    return false;
-                }
-            }
-            return true;
-        }
-        //now, CLIENT_REPLY_OFF 
-        char command[20];
-        snprintf(command, sizeof(command), "CLIENT REPLY %s", reply.c_str());
-        DEBUG_GREEN_LOG ( "command [" << command <<"]" );
-        ElapsedTime elapsed;
-        elapsed.SetStartTime();
-        redisCommand(ctx_, command );
-        old_clent_reply_ = clent_reply_ ;
-        DEBUG_LOG("CLIENT REPLY elapsed =" 
-                << elapsed.SetEndTime(MILLI_SEC_RESOLUTION) << " ms");
-        return true;
-    }
     bool   IsConnected        (){ return is_connected_  ;}  
     size_t GetMaxReconnTryCnt (){ return max_reconn_retry_ ;}  
     void   SetMaxReconnTryCnt (size_t max_cnt){ max_reconn_retry_ = max_cnt ;}  
@@ -370,7 +293,7 @@ class RedisHelper
     }
 
     ///////////////////////////////////////////////////////////////////////////////
-    //XXX reconnect only  --> blocking call !!! XXX
+    //XXX reconnect only  --> blocking call
     bool Reconnect()
     {
         is_connected_ = false;
@@ -406,8 +329,6 @@ class RedisHelper
     size_t              max_reconn_retry_  ;
     size_t              pipe_appended_cnt_ ;
     std::string         err_msg_           ;
-    EnumClientReply     clent_reply_       ;
-    EnumClientReply     old_clent_reply_   ;
     EnumRoleReplication my_server_role_    ;
 
 };  

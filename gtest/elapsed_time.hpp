@@ -46,18 +46,6 @@ class ElapsedTime
 
 #endif
 
-/* usage:
-#include "elapsed_time.hpp"
-int main ()
-{
-    ElapsedTime elapsed;
-    elapsed.SetStartTime();
-    sleep(1);
-    size_t nElapsedMilli= elapsed.SetEndTime(MILLI_SEC_RESOLUTION);
-    //size_t nElapsedMicro= elapsed.SetEndTime(MICRO_SEC_RESOLUTION);
-    return 0;
-}
-*/
 
 
 

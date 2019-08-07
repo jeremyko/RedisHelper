@@ -24,53 +24,6 @@ class RedisTest : public ::testing::Test {
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-TEST_F(RedisTest, SetReplyOffOnReconnect)
-{
-    ElapsedTime elapsed;
-    RedisHelper redis_helper;
-    ASSERT_TRUE(redis_helper.ConnectServer("localhost", 6379));
-
-    DEBUG_LOG("---- OFF ----");
-    elapsed.SetStartTime();
-    EXPECT_TRUE(redis_helper.SetClientReply(CLIENT_REPLY_OFF)); 
-    size_t elapsed_mili= elapsed.SetEndTime(MILLI_SEC_RESOLUTION);
-    DEBUG_LOG("CLIENT_REPLY_OFF elapsed =" << elapsed_mili << " ms");
-    //ON
-    DEBUG_LOG("---- ON ----");
-    elapsed.SetStartTime();
-    EXPECT_TRUE(redis_helper.SetClientReply(CLIENT_REPLY_ON)); 
-    elapsed_mili= elapsed.SetEndTime(MILLI_SEC_RESOLUTION);
-    DEBUG_LOG("CLIENT_REPLY_ON elapsed =" << elapsed_mili << " ms");
-}
-
-///////////////////////////////////////////////////////////////////////////////
-TEST_F(RedisTest, SetReplyOff)
-{
-    ElapsedTime elapsed;
-    RedisHelper redis_helper;
-    ASSERT_TRUE(redis_helper.ConnectServer("127.0.0.1", 6379));
-
-    DEBUG_LOG("---- OFF TEST ----");
-    elapsed.SetStartTime();
-    EXPECT_TRUE(redis_helper.SetClientReply(CLIENT_REPLY_OFF)); 
-    size_t elapsed_mili= elapsed.SetEndTime(MILLI_SEC_RESOLUTION);
-    DEBUG_LOG("CLIENT_REPLY_OFF elapsed =" << elapsed_mili << " ms");
-    //
-    EXPECT_TRUE(redis_helper.DoCommand("ping"));
-    ASSERT_TRUE(redis_helper.GetReply() ==NULL);
-    //ON
-    elapsed.SetStartTime();
-    EXPECT_TRUE(redis_helper.SetClientReply(CLIENT_REPLY_ON)); 
-    elapsed_mili= elapsed.SetEndTime(MILLI_SEC_RESOLUTION);
-    DEBUG_LOG("CLIENT_REPLY_ON elapsed =" << elapsed_mili << " ms");
-    EXPECT_TRUE(redis_helper.DoCommand("ping"));
-    ASSERT_TRUE(redis_helper.GetReply() !=NULL);
-    EXPECT_STREQ(redis_helper.GetReply()->str,"PONG");
-    DEBUG_LOG("reply =" << redis_helper.GetReply()->str );
-}
-
-
-///////////////////////////////////////////////////////////////////////////////
 TEST_F(RedisTest, ConnectServer_success)
 {
     DEBUG_LOG("connect master");
