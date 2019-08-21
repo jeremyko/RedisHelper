@@ -14,11 +14,13 @@ EXPECT_TRUE(redis_helper.DoCommand("SET key1 val1"));
 EXPECT_TRUE(redis_helper.DoCommand("GET key1"));
 ASSERT_TRUE(redis_helper.GetReply() !=NULL);
 EXPECT_STREQ(redis_helper.GetReply()->str,"val1");
+
 //pipeline usage
 for(size_t i=0; i < 1000; i++){    
     EXPECT_TRUE(redis_helper.AppendCmdPipeline("SET key%ld val%ld", i,i));
 }
 EXPECT_TRUE(redis_helper.EndCmdPipeline());
+
 for(size_t i=0; i < 1000; i++){    
     EXPECT_TRUE(redis_helper.AppendCmdPipeline("DEL key%ld",i));
 }
