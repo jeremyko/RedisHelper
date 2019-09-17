@@ -117,11 +117,15 @@ class RedisHelper
             if ( my_server_role_ == ROLE_MASTER && 
                     !strcmp(reply_->element[fld]->str, "master") ) {
                 is_connected_ =true;
+                freeReplyObject(reply_);
+                reply_=NULL;
                 return true;
             }
             else if ( my_server_role_ == ROLE_REPLICA && 
                     !strcmp(reply_->element[fld]->str, "slave") ) {
                 is_connected_ =true;
+                freeReplyObject(reply_);
+                reply_=NULL;
                 return true;
             }
         }
@@ -179,14 +183,14 @@ class RedisHelper
 
     ///////////////////////////////////////////////////////////////////////////////
     bool DoCommand(const char* format, ...) 
-    {
-        va_list ap;
-        va_start(ap, format);
+    {        
         if(reply_){
             freeReplyObject(reply_); 
             reply_=NULL;
         }
         while(true){
+            va_list ap;
+            va_start(ap, format);
             reply_ = (redisReply*)redisvCommand(ctx_, format, ap);
 
             if ( !reply_ || reply_->type == REDIS_REPLY_ERROR ) {
@@ -201,15 +205,18 @@ class RedisHelper
                     if(!Reconnect()){
                         va_end(ap);
                         return false; 
+                    }else{
+                        va_end(ap);
+                        continue;
                     }
-                    continue;
                 }
                 va_end(ap);
                 return false;
-            } //if error
-            break;
-        } //while
-        va_end(ap);
+            }else{ //if error
+                va_end(ap);
+                break;
+            }
+        } //while        
         return true;
     }
 
