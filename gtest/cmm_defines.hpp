@@ -29,6 +29,6 @@
 #define  PRINT_ELOG(x) std::cerr<<LOG_WHERE << COLOR_RED<< x << COLOR_RESET << "\n"
 
 
-#endif
+#endif // __COMMON_DEF_HPP__
 
 
