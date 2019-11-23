@@ -1,5 +1,5 @@
-#ifndef __COMMON_DEF_HPP__
-#define __COMMON_DEF_HPP__
+#ifndef COMMON_DEF_HPP
+#define COMMON_DEF_HPP
 
 //color printf
 #define COLOR_RED  "\x1B[31m"
@@ -14,7 +14,7 @@
 #define  DBG_FMT LV_DEBUG,"(%s-%s-%d) "
 
 ///////////////////////////////////////////////////////////////////////////////
-#ifdef _DEBUG_PRINTF_
+#ifdef DEBUG_PRINTF
 #define  DEBUG_LOG(x)  std::cout<<LOG_WHERE << x << "\n"
 #define  DEBUG_RED_LOG(x) std::cout<<LOG_WHERE << COLOR_RED<< x << COLOR_RESET << "\n"
 #define  DEBUG_GREEN_LOG(x) std::cout<<LOG_WHERE << COLOR_GREEN<< x << COLOR_RESET << "\n"
@@ -29,6 +29,6 @@
 #define  PRINT_ELOG(x) std::cerr<<LOG_WHERE << COLOR_RED<< x << COLOR_RESET << "\n"
 
 
-#endif // __COMMON_DEF_HPP__
+#endif // COMMON_DEF_HPP
 
 

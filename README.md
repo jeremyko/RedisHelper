@@ -11,7 +11,8 @@ hiredis c++ helper class
 ```cpp
 //simple usage
 RedisHelper redis_helper;
-ASSERT_TRUE(redis_helper.ConnectServer("localhost", 6379));
+ASSERT_TRUE(redis_helper.SetIpsPorts("localhost", 6379));
+ASSERT_TRUE(redis_helper.ConnectServer());
 EXPECT_TRUE(redis_helper.DoCommand("SET key1 val1"));
 EXPECT_TRUE(redis_helper.DoCommand("GET key1"));
 ASSERT_TRUE(redis_helper.GetReply() !=NULL);

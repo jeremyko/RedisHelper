@@ -1,6 +1,6 @@
 
-#ifndef __ELAPSED_TIME_HPP__
-#define __ELAPSED_TIME_HPP__
+#ifndef ELAPSED_TIME_HPP
+#define ELAPSED_TIME_HPP
 
 #include <chrono>
 

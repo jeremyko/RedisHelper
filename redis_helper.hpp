@@ -94,7 +94,6 @@ class RedisHelper
         is_connected_  = false;
         signal(SIGHUP, SIG_IGN);
         signal(SIGPIPE, SIG_IGN);
-        char port_str [100];
 
         struct timeval timeout = { (long)connect_timeout_, 0 };
         auto  it_vec  = vec_ip_ports_.begin();
@@ -104,11 +103,10 @@ class RedisHelper
                 ctx_=NULL;
             }
             ctx_ = redisConnectWithTimeout(it_vec->ip.c_str(), it_vec->port, timeout);
-            snprintf(port_str, sizeof(port_str),"%ld", it_vec->port);
             if ( ctx_ == 0x00 || ctx_->err ) {
                 if ( ctx_ ) {
                     err_msg_ =  it_vec->ip+ std::string(":") + 
-                        std::string(port_str) +std::string(",") + ctx_->errstr;
+                        std::to_string(it_vec->port) +std::string(",") + ctx_->errstr;
                     redisFree(ctx_);
                     ctx_=NULL;
                     DEBUG_ELOG (err_msg_ );
@@ -165,7 +163,7 @@ class RedisHelper
             }//for
             freeReplyObject(reply_); 
             reply_=NULL;
-            err_msg_ = it_vec->ip +std::string(",") +std::string(port_str)+
+            err_msg_ = it_vec->ip +std::string(",") +std::to_string(it_vec->port)+
                 std::string(" : ") + std::string("connected but NOT master");
             DEBUG_LOG (err_msg_ );
             if(user_msg_cb_){
