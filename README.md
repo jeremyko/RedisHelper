@@ -2,7 +2,9 @@
 hiredis c++ helper class
 
 ## features 
-- header only library 
+- header only library
+- connect/disconnect callbacks with ip,port information.
+- auto reconnecting 
 - pipeline support 
 
 ## usage
