@@ -43,9 +43,6 @@
 
 #define  LOG_WHERE "("<<__FILE__<<"-"<<__func__<<"-"<<__LINE__<<") "
 #define  WHERE_DEF __FILE__,__func__,__LINE__
-#define  ERROR_FMT LV_ERROR,"(%s-%s-%d) "
-#define  INFO_FMT  LV_INFO,"(%s-%s-%d) "
-#define  DBG_FMT LV_DEBUG,"(%s-%s-%d) "
 
 #ifdef DEBUG_PRINTF
 #define  DEBUG_LOG(x)  std::cout<<LOG_WHERE << x << "\n"
