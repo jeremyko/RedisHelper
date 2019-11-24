@@ -2,7 +2,6 @@
 #include <gtest/gtest.h>
 #include <iostream>
 #include "elapsed_time.hpp"
-#include "cmm_defines.hpp"
 #include "redis_helper.hpp"
 
 //const size_t MAX_LOOP = 100000;

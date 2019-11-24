@@ -1,5 +1,7 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 
+project(RedisHelperTest)
+
 #SET(CMAKE_BUILD_TYPE Debug)
 SET(CMAKE_BUILD_TYPE Release)
 
