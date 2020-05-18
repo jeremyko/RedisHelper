@@ -1,5 +1,5 @@
 /****************************************************************************
- Copyright (c) 2019 ko jung hyun
+ Copyright (c) 2020 ko jung hyun
  
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
 #define REDIS_HELPER_HPP
 
 #include <hiredis/hiredis.h>
-#include <unistd.h> //sleep
+#include <unistd.h> //usleep
 #include <string.h>
 #include <signal.h>
 #include <iostream>
@@ -91,6 +91,7 @@ class RedisHelper
         pipe_appended_cnt_ = 0;
         max_reconn_retry_ = MAX_CONNECT_RETRY ;
         connect_timeout_ = 10; //default 10 secs
+        reconnect_interval_micro_secs_ = 500000 ;//default 0.5 sec
         user_connect_cb_    = NULL;
         user_disconnect_cb_ = NULL;
         user_msg_cb_        = NULL;
@@ -117,6 +118,7 @@ class RedisHelper
         is_connected_  = false;
         signal(SIGHUP, SIG_IGN);
         signal(SIGPIPE, SIG_IGN);
+        char port_str [100];
 
         struct timeval timeout = { (long)connect_timeout_, 0 };
         auto  it_vec  = vec_ip_ports_.begin();
@@ -126,10 +128,11 @@ class RedisHelper
                 ctx_=NULL;
             }
             ctx_ = redisConnectWithTimeout(it_vec->ip.c_str(), it_vec->port, timeout);
+            snprintf(port_str, sizeof(port_str),"%ld", it_vec->port);
             if ( ctx_ == 0x00 || ctx_->err ) {
                 if ( ctx_ ) {
                     err_msg_ =  it_vec->ip+ std::string(":") + 
-                        std::to_string(it_vec->port) +std::string(",") + ctx_->errstr;
+                        std::string(port_str) +std::string(",") + ctx_->errstr;
                     redisFree(ctx_);
                     ctx_=NULL;
                     DEBUG_ELOG (err_msg_ );
@@ -163,9 +166,9 @@ class RedisHelper
                 }
                 DEBUG_LOG ("reply role -->" << reply_->element[fld]->str );
                 if (!strcmp(reply_->element[fld]->str, "master") ) {
-                    DEBUG_GREEN_LOG("connect ok :"<<it_vec->ip<<","<<it_vec->port);
+                    DEBUG_LOG("connect ok :"<<it_vec->ip<<","<<it_vec->port);
                     is_connected_  = true;
-                    //invoke user_connect_cb_ --> master only
+                    //user_connect_cb_ --> master only
                     if(user_connect_cb_){
                         if(is_reconnect ){ 
                             //true --> reconnect flag
@@ -176,7 +179,6 @@ class RedisHelper
                                              it_vec->ip.c_str(),it_vec->port,false); 
                         }
                     }
-                    //reset connected info
                     connected_ip_   = it_vec->ip;
                     connected_port_ = it_vec->port;
                     freeReplyObject(reply_); 
@@ -186,7 +188,7 @@ class RedisHelper
             }//for
             freeReplyObject(reply_); 
             reply_=NULL;
-            err_msg_ = it_vec->ip +std::string(",") +std::to_string(it_vec->port)+
+            err_msg_ = it_vec->ip +std::string(",") +std::string(port_str)+
                 std::string(" : ") + std::string("connected but NOT master");
             DEBUG_LOG (err_msg_ );
             if(user_msg_cb_){
@@ -195,12 +197,11 @@ class RedisHelper
         } //------ for
         return false;
     }
-
+    ////////////////////////////////////////////////////////////////////////////
     void   SetConnectTimeoutSecs(size_t secs) { connect_timeout_ = secs;} 
 
     ////////////////////////////////////////////////////////////////////////////
-    bool DoCommand(const char* format, ...) 
-    {
+    bool DoCommand(const char* format, ...) {
         if(reply_){
             freeReplyObject(reply_); 
             reply_=NULL;
@@ -221,6 +222,7 @@ class RedisHelper
                     reply_=NULL;
                 }
                 if( IsThisConnectionError(ctx_->err) ){ //reconnect and retry
+                    is_connected_ = false;
                     if(user_disconnect_cb_){
                         user_disconnect_cb_(connected_ip_.c_str(), 
                                             connected_port_, ctx_->errstr );
@@ -250,8 +252,15 @@ class RedisHelper
     }
 
     ////////////////////////////////////////////////////////////////////////////
+    //return false cases : Out of memory, Invalid format string, 
+    //sdscatlen(C dynamic strings library) fail
     bool AppendCmdPipeline(const char* format, ... )
     {
+        if(ctx_==NULL){
+            err_msg_ = "ctx_==NULL";
+            DEBUG_ELOG (err_msg_ );
+            return false;
+        }
         va_list ap;
         va_start(ap, format);
         if(REDIS_OK !=redisvAppendCommand(ctx_,format,ap)){
@@ -266,7 +275,7 @@ class RedisHelper
     } 
 
     ////////////////////////////////////////////////////////////////////////////
-    bool EndCmdPipeline()
+    bool EndCmdPipeline(bool do_reconnect = true)
     {
         DEBUG_LOG ("pipe_appended_cnt_ = " << pipe_appended_cnt_ );
         if(reply_){
@@ -277,21 +286,29 @@ class RedisHelper
         while( pipe_appended_cnt_ > 0 ){
             int result = redisGetReply(ctx_,(void**) &reply_); 
             if(REDIS_OK != result){
+                is_connected_ = false;
                 if( IsThisConnectionError(ctx_->err) ){ //reconnect and retry
                     if(user_disconnect_cb_){
                         user_disconnect_cb_(connected_ip_.c_str(), 
                                             connected_port_,ctx_->errstr);
                     }
                     char tmp_msg [128];
-                    snprintf(tmp_msg,sizeof(tmp_msg),"redisGetReply failed :%s %ld, %s",
-                            connected_ip_.c_str(), connected_port_,ctx_->errstr);
+                    snprintf(tmp_msg,sizeof(tmp_msg),"(%s:%d) redisGetReply failed :%s %ld, "
+                            "pipe_appended_cnt_= %ld, %s",
+                            __func__,__LINE__, connected_ip_.c_str(), connected_port_,
+                            pipe_appended_cnt_, ctx_->errstr);
                     err_msg_ = std::string(tmp_msg) + std::string(":") + 
                                std::string(strerror(errno)) ;
                     DEBUG_ELOG (err_msg_);
                     if(user_msg_cb_){
                         user_msg_cb_(tmp_msg);
                     }
-                    Reconnect(); 
+                    if(do_reconnect){
+                        DEBUG_ELOG ("call Reconnect()");
+                        if(Reconnect()){  
+                            DEBUG_GREEN_LOG ("Reconnect() success");
+                        }
+                    }
                 }
                 return false; 
             }
@@ -309,7 +326,7 @@ class RedisHelper
                 reply_=NULL;
             }
             pipe_appended_cnt_--;
-        }
+        } //while
         if(is_error){
             DEBUG_ELOG ("false" );
             return false;
@@ -321,7 +338,6 @@ class RedisHelper
     redisReply* GetReply() { 
         return reply_; 
     }
-
     ////////////////////////////////////////////////////////////////////////////
     void SetIpsPorts (const char* ip, size_t port){
         ConnIpPort ip_port;
@@ -330,17 +346,20 @@ class RedisHelper
         vec_ip_ports_.push_back(ip_port);
         DEBUG_LOG("ip ="<<ip << ",port=" <<port << ",cnt=" <<vec_ip_ports_.size());
     }
-
     ////////////////////////////////////////////////////////////////////////////
+    //reconnect only  --> blocking call 
     bool Reconnect() {
         size_t retry = 0;
         char tmp_msg [128];
         while(true){
+            if(max_reconn_retry_>0){
+                retry++;
+            }
             if(!ConnectServer(true )) { //true -> is_reconnect
                 snprintf(tmp_msg,sizeof(tmp_msg),"connect failed, retry:%s %ld",
                          connected_ip_.c_str(), connected_port_);
                 DEBUG_ELOG (tmp_msg);
-                sleep(1);
+                usleep(reconnect_interval_micro_secs_); 
             }else{
                 snprintf(tmp_msg,sizeof(tmp_msg),"reconnect OK :%s:%ld ",
                          connected_ip_.c_str(),connected_port_ );
@@ -351,7 +370,7 @@ class RedisHelper
                 return true;
             }
             if(user_abort_cb_!=NULL && user_abort_cb_()){
-                snprintf(tmp_msg,sizeof(tmp_msg),"abort reconnecting :%s %ld",
+                snprintf(tmp_msg,sizeof(tmp_msg),"abort reconnect :%s %ld",
                          connected_ip_.c_str(), connected_port_);
                 if(user_msg_cb_){
                     user_msg_cb_(tmp_msg);
@@ -367,9 +386,6 @@ class RedisHelper
                 }
                 DEBUG_ELOG (tmp_msg);
                 break;
-            }
-            if(max_reconn_retry_>0){
-                retry++;
             }
         }//while
         return false;
@@ -393,6 +409,7 @@ class RedisHelper
 
     //max_cnt = 0 --> infinite retry 
     void   SetMaxReconnTryCnt (size_t max_cnt){ max_reconn_retry_ = max_cnt ;}  
+    void   SetReconnectInterval (size_t micro_secs){ reconnect_interval_micro_secs_ = micro_secs ;}
     size_t GetAppendedCmdCnt  (){ return pipe_appended_cnt_  ; }
     void   ReSetAppendedCmdCnt(){ pipe_appended_cnt_ =0 ; }
     const char* GetLastErrMsg (){ return err_msg_.c_str(); }
@@ -414,7 +431,6 @@ class RedisHelper
         return false;
     }
 
-
   protected:
     CONNECT_CALLBACK    user_connect_cb_   ;
     DISCONNECT_CALLBACK user_disconnect_cb_;
@@ -428,15 +444,17 @@ class RedisHelper
     std::string         err_msg_           ;
     std::string         connected_ip_      ; 
     size_t              connected_port_    ; 
+    size_t              reconnect_interval_micro_secs_ ; 
     bool                is_connected_      ;
     VecConnIpPorts      vec_ip_ports_      ;
+
   public:
     int                 user_specific_     ;
 
 };  
-typedef std::vector<std::unique_ptr<RedisHelper>> VecRedisHelperPtr ;
+typedef std::vector<RedisHelper*> VecRedisHelperPtr ;
 typedef VecRedisHelperPtr::iterator ItRedisHelperPtr ;
 
-#endif
+#endif // REDIS_HELPER_HPP
 
 
